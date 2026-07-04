@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tableau de bord — Enseignements Complémentaires</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="dashboard.css" />
+  <style>
+    /* ── Panneau de gestion des jauges ───────────────────────────────────── */
+    .dash-gauges {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 1.75rem 2rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .gauge-mgmt-intro {
+      font-size: .82rem;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+    }
+
+    .gauge-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .gauge-card {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.1rem 1rem;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .gauge-card:hover { border-color: #b0b8cc; box-shadow: 0 2px 10px rgba(26,39,68,.07); }
+    .gauge-card.is-full { border-color: rgba(192,57,43,.3); background: #fdf5f4; }
+
+    .gauge-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: .75rem;
+      gap: .5rem;
+    }
+    .gauge-card-name {
+      font-family: 'Playfair Display', serif;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--navy);
+      line-height: 1.25;
+    }
+    .gauge-card-badge {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      padding: .18rem .5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-ok   { background: #d8f3dc; color: #1e5631; }
+    .badge-low  { background: #fef3c7; color: #92400e; }
+    .badge-full { background: var(--error-bg); color: var(--error); }
+
+    /* Barre de jauge interactive */
+    .gauge-visual {
+      margin-bottom: .65rem;
+    }
+    .gauge-track {
+      position: relative;
+      height: 8px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width .35s ease, background .35s ease;
+    }
+    .gauge-fill.fill-ok   { background: linear-gradient(90deg, #2d6a4f, #40916c); }
+    .gauge-fill.fill-low  { background: linear-gradient(90deg, #d97706, #f59e0b); }
+    .gauge-fill.fill-full { background: linear-gradient(90deg, var(--error), #e74c3c); }
+
+    .gauge-legend {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: .3rem;
+      font-size: .72rem;
+      color: var(--text-muted);
+    }
+    .gauge-legend strong { color: var(--text); font-weight: 600; }
+
+    /* Contrôles de capacité */
+    .gauge-controls {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin-top: .8rem;
+      padding-top: .8rem;
+      border-top: 1px solid var(--border);
+    }
+    .gauge-controls label {
+      font-size: .75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .capacity-input {
+      width: 64px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      padding: .35rem .5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--navy);
+      text-align: center;
+      background: var(--white);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .capacity-input:focus { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(26,39,68,.1); }
+    .capacity-input:disabled { background: #f0eeea; color: var(--text-muted); cursor: not-allowed; }
+
+    .btn-capacity-save {
+      flex: 1;
+      background: var(--navy);
+      color: var(--white);
+      border: none;
+      padding: .38rem .75rem;
+      font-family: 'Inter', sans-serif;
+      font-size: .78rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    .btn-capacity-save:hover { background: var(--navy-light); }
+    .btn-capacity-save:disabled { background: #b0bac8; cursor: not-allowed; }
+
+    .btn-capacity-reset {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-muted);
+      padding: .36rem .6rem;
+      font-family: 'Inter', sans-serif;
+      font-size: .75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-capacity-reset:hover { border-color: var(--error); color: var(--error); }
+
+    .gauge-save-feedback {
+      font-size: .7rem;
+      height: .85rem;
+      margin-top: .3rem;
+      text-align: right;
+      transition: opacity .3s;
+    }
+    .gauge-save-feedback.ok   { color: #2d6a4f; }
+    .gauge-save-feedback.err  { color: var(--error); }
+
+    /* Toast notification */
+    .toast-notif {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: var(--navy);
+      color: var(--white);
+      padding: .75rem 1.25rem;
+      border-radius: 8px;
+      font-size: .85rem;
+      font-weight: 500;
+      box-shadow: 0 6px 20px rgba(0,0,0,.2);
+      z-index: 999;
+      transform: translateY(20px);
+      opacity: 0;
+      transition: transform .25s ease, opacity .25s ease;
+      max-width: 340px;
+    }
+    .toast-notif.show { transform: translateY(0); opacity: 1; }
+    .toast-notif.toast-success { background: #2d6a4f; }
+    .toast-notif.toast-error   { background: var(--error); }
+  </style>
+</head>
+<body class="dashboard-body">
+
+  <header class="site-header compact">
+    <div class="header-inner">
+      <div class="header-eyebrow">Administration</div>
+      <h1 class="header-title">Tableau de <em>bord</em></h1>
+      <a href="index.html" class="header-back">← Formulaire d'inscription</a>
+    </div>
+  </header>
+
+  <main class="dashboard-main">
+
+    <!-- ── Cartes résumé ─────────────────────────────────────────────────── -->
+    <section class="dash-summary" id="dash-summary">
+      <div class="summary-card">
+        <div class="summary-num" id="total-inscrits">—</div>
+        <div class="summary-label">inscrits au total</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-num" id="total-full">—</div>
+        <div class="summary-label">ateliers complets</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-num" id="total-places">—</div>
+        <div class="summary-label">places restantes</div>
+      </div>
+    </section>
+
+    <!-- ── Gestion des jauges ─────────────────────────────────────────────── -->
+    <section class="dash-gauges">
+      <h2 class="dash-section-title">Gestion des capacités</h2>
+      <p class="gauge-mgmt-intro">
+        Modifiez la capacité maximale de chaque atelier en temps réel. Le formulaire d'inscription
+        se met à jour instantanément. La capacité ne peut pas descendre en dessous du nombre
+        d'inscrits actuels.
+      </p>
+      <div class="gauge-grid" id="gauge-grid">
+        <!-- Peuplé par JS -->
+      </div>
+    </section>
+
+    <!-- ── Exports ────────────────────────────────────────────────────────── -->
+    <section class="dash-exports">
+      <h2 class="dash-section-title">Exports</h2>
+      <div class="export-buttons">
+        <button class="btn-export" id="btn-export-all">
+          ⬇ Exporter tous les inscrits (CSV)
+        </button>
+        <div class="export-sep">ou par atelier :</div>
+        <div class="export-atelier-btns" id="export-atelier-btns"></div>
+      </div>
+    </section>
+
+    <!-- ── Listes par atelier ─────────────────────────────────────────────── -->
+    <section class="dash-tables">
+      <h2 class="dash-section-title">Liste par atelier</h2>
+      <div id="atelier-tables-wrap"></div>
+    </section>
+
+  </main>
+
+  <!-- Toast global -->
+  <div class="toast-notif" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue, set, runTransaction }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { FIREBASE_CONFIG, ATELIERS } from "./config.js";
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db  = getDatabase(app);
+
+    let allInscriptions = [];
+    let counts    = {};
+    let capacities = {};   // { key: number } — capacités personnalisées
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function getMax(atelier) {
+      return capacities[atelier.key] ?? atelier.max;
+    }
+
+    function fmtDate(ts) {
+      if (!ts) return "";
+      return new Date(ts).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    function toCSV(rows, headers) {
+      const escape = v => `"${String(v).replace(/"/g, '""')}"`;
+      return [headers.map(escape).join(";"), ...rows.map(r => r.map(escape).join(";"))].join("\n");
+    }
+
+    function downloadCSV(content, filename) {
+      const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function showToast(msg, type = "success") {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.className = `toast-notif show toast-${type}`;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove("show"), 3500);
+    }
+
+    // ── Render résumé ──────────────────────────────────────────────────────
+    function renderSummary() {
+      document.getElementById("total-inscrits").textContent = allInscriptions.length;
+      const fullCount  = ATELIERS.filter(a => (counts[a.key] || 0) >= getMax(a)).length;
+      document.getElementById("total-full").textContent = fullCount;
+      const placesLeft = ATELIERS.reduce((acc, a) => acc + Math.max(0, getMax(a) - (counts[a.key] || 0)), 0);
+      document.getElementById("total-places").textContent = placesLeft;
+    }
+
+    // ── Render jauges ──────────────────────────────────────────────────────
+    function renderGauges() {
+      const grid = document.getElementById("gauge-grid");
+      grid.innerHTML = "";
+
+      ATELIERS.forEach(atelier => {
+        const current = counts[atelier.key] || 0;
+        const max     = getMax(atelier);
+        const rem     = max - current;
+        const pct     = Math.min(100, (current / max) * 100);
+        const isFull  = rem <= 0;
+        const isLow   = !isFull && rem <= 3;
+
+        const badgeClass = isFull ? "badge-full" : isLow ? "badge-low" : "badge-ok";
+        const badgeText  = isFull ? "Complet" : isLow ? `${rem} place${rem > 1 ? "s" : ""}` : "Ouvert";
+        const fillClass  = isFull ? "fill-full" : isLow ? "fill-low" : "fill-ok";
+
+        const card = document.createElement("div");
+        card.className = "gauge-card" + (isFull ? " is-full" : "");
+        card.id = "gauge-card-" + atelier.key;
+        card.innerHTML = `
+          <div class="gauge-card-header">
+            <div class="gauge-card-name">${atelier.name}</div>
+            <span class="gauge-card-badge ${badgeClass}">${badgeText}</span>
+          </div>
+          <div class="gauge-visual">
+            <div class="gauge-track">
+              <div class="gauge-fill ${fillClass}" id="gfill-${atelier.key}" style="width:${pct.toFixed(1)}%"></div>
+            </div>
+            <div class="gauge-legend">
+              <span><strong>${current}</strong> inscrits</span>
+              <span>max <strong id="gmax-${atelier.key}">${max}</strong></span>
+            </div>
+          </div>
+          <div class="gauge-controls">
+            <label for="cap-${atelier.key}">Capacité :</label>
+            <input
+              type="number"
+              id="cap-${atelier.key}"
+              class="capacity-input"
+              value="${max}"
+              min="${current}"
+              max="999"
+              step="1"
+              aria-label="Capacité maximale de l'atelier ${atelier.name}"
+            />
+            <button class="btn-capacity-save" id="save-${atelier.key}" onclick="saveCapacity('${atelier.key}')">
+              Enregistrer
+            </button>
+            <button class="btn-capacity-reset" id="reset-${atelier.key}" onclick="resetCapacity('${atelier.key}', ${atelier.max})" title="Remettre à la valeur par défaut (${atelier.max})">
+              ↺
+            </button>
+          </div>
+          <div class="gauge-save-feedback" id="fb-${atelier.key}"></div>`;
+
+        // Mise à jour live de la jauge preview quand l'input change
+        card.querySelector(`#cap-${atelier.key}`).addEventListener("input", (e) => {
+          const newMax = parseInt(e.target.value, 10);
+          if (!isNaN(newMax) && newMax >= current) {
+            const newPct = Math.min(100, (current / newMax) * 100);
+            const fill   = document.getElementById(`gfill-${atelier.key}`);
+            const gmaxEl = document.getElementById(`gmax-${atelier.key}`);
+            if (fill) { fill.style.width = newPct.toFixed(1) + "%"; }
+            if (gmaxEl) { gmaxEl.textContent = newMax; }
+          }
+        });
+
+        grid.appendChild(card);
+      });
+    }
+
+    // ── Sauvegarde capacité ────────────────────────────────────────────────
+    window.saveCapacity = async function(key) {
+      const input  = document.getElementById("cap-" + key);
+      const fbEl   = document.getElementById("fb-" + key);
+      const saveBtn = document.getElementById("save-" + key);
+      const newMax = parseInt(input.value, 10);
+      const current = counts[key] || 0;
+      const atelier = ATELIERS.find(a => a.key === key);
+
+      // Validation
+      if (isNaN(newMax) || newMax < 1) {
+        fbEl.textContent = "Valeur invalide.";
+        fbEl.className = "gauge-save-feedback err";
+        return;
+      }
+      if (newMax < current) {
+        fbEl.textContent = `Impossible : ${current} étudiant${current > 1 ? "s" : ""} déjà inscrit${current > 1 ? "s" : ""}.`;
+        fbEl.className = "gauge-save-feedback err";
+        input.value = current;
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = "…";
+      fbEl.textContent = "";
+
+      try {
+        await set(ref(db, `capacities/${key}`), newMax);
+        fbEl.textContent = "✓ Enregistré";
+        fbEl.className = "gauge-save-feedback ok";
+        showToast(`Capacité de « ${atelier.name} » mise à jour : ${newMax} places`, "success");
+        setTimeout(() => { fbEl.textContent = ""; }, 3000);
+      } catch (err) {
+        fbEl.textContent = "Erreur — réessayez.";
+        fbEl.className = "gauge-save-feedback err";
+        showToast("Erreur lors de la sauvegarde.", "error");
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Enregistrer";
+      }
+    };
+
+    // ── Reset capacité (valeur par défaut du config.js) ────────────────────
+    window.resetCapacity = async function(key, defaultMax) {
+      if (!confirm(`Remettre la capacité à ${defaultMax} (valeur par défaut) ?`)) return;
+      const atelier = ATELIERS.find(a => a.key === key);
+      try {
+        await set(ref(db, `capacities/${key}`), defaultMax);
+        showToast(`Capacité de « ${atelier.name} » réinitialisée à ${defaultMax}`, "success");
+      } catch (err) {
+        showToast("Erreur lors de la réinitialisation.", "error");
+      }
+    };
+
+    // ── Render listes par atelier ──────────────────────────────────────────
+    function renderTables() {
+      const btnWrap = document.getElementById("export-atelier-btns");
+      btnWrap.innerHTML = "";
+      ATELIERS.forEach(atelier => {
+        const btn = document.createElement("button");
+        btn.className = "btn-export-sm";
+        btn.textContent = atelier.name;
+        btn.addEventListener("click", () => exportAtelier(atelier));
+        btnWrap.appendChild(btn);
+      });
+
+      const wrap = document.getElementById("atelier-tables-wrap");
+      wrap.innerHTML = "";
+      ATELIERS.forEach(atelier => {
+        const inscrits = allInscriptions
+          .filter(i => i.ateliers && i.ateliers.includes(atelier.key))
+          .sort((a, b) => a.nom.localeCompare(b.nom));
+        const c      = counts[atelier.key] || 0;
+        const max    = getMax(atelier);
+        const isFull = c >= max;
+        const pct    = Math.min(100, (c / max) * 100);
+
+        const section = document.createElement("div");
+        section.className = "atelier-table-section";
+        section.innerHTML = `
+          <div class="atelier-table-header">
+            <div>
+              <span class="atelier-table-code">A1</span>
+              <span class="atelier-table-name">${atelier.name}</span>
+              ${isFull ? '<span class="badge-full">Complet</span>' : ""}
+            </div>
+            <div class="atelier-table-stats">
+              <div class="gauge-wrap narrow">
+                <div class="gauge-bar" style="width:${pct.toFixed(1)}%"></div>
+              </div>
+              <span class="atelier-table-count">${c} / ${max}</span>
+            </div>
+          </div>
+          ${inscrits.length === 0
+            ? '<p class="empty-table">Aucun inscrit pour le moment.</p>'
+            : `<table class="inscrit-table">
+                <thead><tr>
+                  <th>#</th><th>Nom</th><th>Prénom</th><th>Email</th><th>Date d'inscription</th>
+                </tr></thead>
+                <tbody>${inscrits.map((i, idx) => `
+                  <tr>
+                    <td class="cell-num">${idx + 1}</td>
+                    <td class="cell-nom">${i.nom.toUpperCase()}</td>
+                    <td>${i.prenom}</td>
+                    <td class="cell-email">${i.email}</td>
+                    <td class="cell-date">${fmtDate(i.timestamp)}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>`}`;
+        wrap.appendChild(section);
+      });
+    }
+
+    // ── Render global ──────────────────────────────────────────────────────
+    function render() {
+      renderSummary();
+      renderGauges();
+      renderTables();
+    }
+
+    // ── Exports CSV ────────────────────────────────────────────────────────
+    document.getElementById("btn-export-all").addEventListener("click", () => {
+      const rows = [...allInscriptions]
+        .sort((a, b) => a.nom.localeCompare(b.nom))
+        .map(i => [
+          i.nom.toUpperCase(),
+          i.prenom,
+          i.email,
+          (i.ateliers || []).map(k => ATELIERS.find(a => a.key === k)?.name || k).join(" | "),
+          fmtDate(i.timestamp)
+        ]);
+      const csv = toCSV(rows, ["Nom", "Prénom", "Email", "Ateliers choisis", "Date d'inscription"]);
+      downloadCSV(csv, "inscrits-tous-ateliers.csv");
+    });
+
+    function exportAtelier(atelier) {
+      const inscrits = allInscriptions
+        .filter(i => i.ateliers && i.ateliers.includes(atelier.key))
+        .sort((a, b) => a.nom.localeCompare(b.nom));
+      const rows = inscrits.map((i, idx) => [
+        String(idx + 1),
+        i.nom.toUpperCase(),
+        i.prenom,
+        i.email,
+        fmtDate(i.timestamp)
+      ]);
+      const csv = toCSV(rows, ["#", "Nom", "Prénom", "Email", "Date d'inscription"]);
+      downloadCSV(csv, `inscrits-${atelier.key}.csv`);
+    }
+
+    // ── Données temps réel ─────────────────────────────────────────────────
+    onValue(ref(db, "inscriptions"), snap => {
+      allInscriptions = Object.values(snap.val() || {});
+      render();
+    });
+
+    onValue(ref(db, "counts"), snap => {
+      counts = snap.val() || {};
+      render();
+    });
+
+    onValue(ref(db, "capacities"), snap => {
+      capacities = snap.val() || {};
+      render();
+    });
+  </script>
+</body>
+</html>
+</html>
