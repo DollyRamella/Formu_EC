@@ -80,16 +80,16 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, runTransaction }
+    import { getDatabase, ref, onValue, push, runTransaction, set, remove }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { FIREBASE_CONFIG, ATELIERS } from "./config.js";
 
     const app = initializeApp(FIREBASE_CONFIG);
-    const db  = getDatabase(app);
+    const db = getDatabase(app);
 
     // ── State ──────────────────────────────────────────────────────────────
-    let selected   = new Set();
-    let counts     = {};
+    let selected = new Set();
+    let counts = {};
     // FIX : capacités dynamiques lues depuis Firebase (nœud "capacities")
     let capacities = {};
 
@@ -99,26 +99,31 @@
       return capacities[atelier.key] ?? atelier.max;
     }
 
+    // FIX : transforme un email en clé Firebase valide
+    // (Firebase interdit les caractères . # $ [ ] dans une clé)
+    function emailToKey(email) {
+      return email.trim().toLowerCase().replace(/[.#$\[\]]/g, "_");
+    }
+
     // ── Render cards ───────────────────────────────────────────────────────
     const grid = document.getElementById("ateliers-grid");
 
     function renderCards() {
       grid.innerHTML = "";
       ATELIERS.forEach(atelier => {
-        const count     = counts[atelier.key] || 0;
+        const count = counts[atelier.key] || 0;
         // FIX : utilise effectiveMax au lieu de atelier.max
-        const max       = effectiveMax(atelier);
+        const max = effectiveMax(atelier);
         const remaining = max - count;
-        const isFull    = remaining <= 0;
+        const isFull = remaining <= 0;
         const isSelected = selected.has(atelier.key);
         const pct = Math.min(100, (count / max) * 100);
 
         const card = document.createElement("label");
         card.className = "atelier-card" +
-          (isFull    ? " full"     : "") +
+          (isFull ? " full" : "") +
           (isSelected ? " selected" : "");
         card.setAttribute("for", "cb-" + atelier.key);
-
         card.innerHTML = `
           <input type="checkbox" id="cb-${atelier.key}" value="${atelier.key}"
             ${isSelected ? "checked" : ""}
@@ -139,7 +144,6 @@
               </div>
             </div>
           </div>`;
-
         card.querySelector(".atelier-cb").addEventListener("change", handleCheck);
         grid.appendChild(card);
       });
@@ -174,14 +178,14 @@
     // ── Validation ─────────────────────────────────────────────────────────
     function validateForm() {
       const prenom = document.getElementById("input-prenom").value.trim();
-      const nom    = document.getElementById("input-nom").value.trim();
-      const email  = document.getElementById("input-email").value.trim();
+      const nom = document.getElementById("input-nom").value.trim();
+      const email = document.getElementById("input-email").value.trim();
 
       // FIX : un atelier sélectionné mais désormais complet (capacité réduite)
       // doit être retiré de la sélection et recalculé.
       for (const key of [...selected]) {
         const atelier = ATELIERS.find(a => a.key === key);
-        const max     = effectiveMax(atelier);
+        const max = effectiveMax(atelier);
         if ((counts[key] || 0) >= max) {
           selected.delete(key);
         }
@@ -198,33 +202,49 @@
     // ── Submit ─────────────────────────────────────────────────────────────
     document.getElementById("btn-submit").addEventListener("click", async () => {
       const prenom = document.getElementById("input-prenom").value.trim();
-      const nom    = document.getElementById("input-nom").value.trim();
-      const email  = document.getElementById("input-email").value.trim();
-      const choix  = [...selected];
-      const btn    = document.getElementById("btn-submit");
-
-      btn.disabled  = true;
+      const nom = document.getElementById("input-nom").value.trim();
+      const email = document.getElementById("input-email").value.trim();
+      const choix = [...selected];
+      const btn = document.getElementById("btn-submit");
+      btn.disabled = true;
       btn.textContent = "Inscription en cours…";
+      const emailKey = emailToKey(email);
 
       try {
+        // FIX : réservation de l'email — empêche les doublons.
+        // La règle Firebase ".write": "!data.exists()" garantit que
+        // deux inscriptions simultanées avec le même email ne peuvent
+        // pas réussir toutes les deux (vérification côté serveur).
+        try {
+          await set(ref(db, `emailsInscrits/${emailKey}`), {
+            email,
+            timestamp: Date.now()
+          });
+        } catch (emailErr) {
+          alert("Cette adresse e-mail est déjà inscrite. Chaque étudiant ne peut s'inscrire qu'une seule fois.");
+          btn.disabled = false;
+          btn.textContent = "Confirmer mon inscription";
+          return;
+        }
+
         // FIX : la transaction lit la capacité effective depuis Firebase
         // via le nœud "capacities" (snapshot pris juste avant la transaction).
         // On ne se fie plus à atelier.max statique du config.js.
         for (const key of choix) {
           const atelier = ATELIERS.find(a => a.key === key);
           // Capacité effective au moment de la soumission
-          const maxNow  = effectiveMax(atelier);
+          const maxNow = effectiveMax(atelier);
           let over = false;
-
           await runTransaction(ref(db, `counts/${key}`), current => {
             const c = current || 0;
             if (c >= maxNow) { over = true; return undefined; }
             return c + 1;
           });
-
           if (over) {
+            // FIX : on libère la réservation d'email, l'inscription n'a pas abouti
+            await remove(ref(db, `emailsInscrits/${emailKey}`));
             alert(`L'atelier "${atelier.name}" est complet. Veuillez en choisir un autre.`);
-            btn.disabled    = false;
+            btn.disabled = false;
             btn.textContent = "Confirmer mon inscription";
             return;
           }
@@ -248,9 +268,11 @@
         document.getElementById("confirmation-overlay").classList.remove("hidden");
 
       } catch (err) {
+        // FIX : en cas d'erreur imprévue, on libère la réservation d'email
+        try { await remove(ref(db, `emailsInscrits/${emailKey}`)); } catch (_) {}
         alert("Erreur lors de l'inscription. Veuillez réessayer.");
         console.error(err);
-        btn.disabled    = false;
+        btn.disabled = false;
         btn.textContent = "Confirmer mon inscription";
       }
     });
@@ -258,8 +280,8 @@
     document.getElementById("btn-new-inscription").addEventListener("click", () => {
       selected.clear();
       document.getElementById("input-prenom").value = "";
-      document.getElementById("input-nom").value    = "";
-      document.getElementById("input-email").value  = "";
+      document.getElementById("input-nom").value = "";
+      document.getElementById("input-email").value = "";
       document.getElementById("confirmation-overlay").classList.add("hidden");
       document.getElementById("btn-submit").textContent = "Confirmer mon inscription";
       updateCounter();
@@ -306,4 +328,4 @@
     updateCounter();
   </script>
 </body>
-</html> 
+</html>
