@@ -7,15 +7,22 @@
         ".validate": "newData.isNumber() && newData.val() >= 0"
       }
     },
+    "capacities": {
+      ".read": true,
+      ".write": true,
+      "$atelierKey": {
+        ".validate": "newData.isNumber() && newData.val() >= 1"
+      }
+    },
     "emailsInscrits": {
-      ".read": "auth != null",
+      ".read": true,
       "$emailKey": {
         ".write": "!data.exists() || newData.val() == null",
         ".validate": "newData.hasChildren(['email','timestamp'])"
       }
     },
     "inscriptions": {
-      ".read": "auth != null",
+      ".read": true,
       ".write": true,
       "$inscriptionId": {
         ".validate": "newData.hasChildren(['prenom','nom','email','ateliers','timestamp'])",
